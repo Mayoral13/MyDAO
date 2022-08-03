@@ -1,5 +1,5 @@
-const Migrations = artifacts.require("Migrations");
+const DAO = artifacts.require("MyDAO");
 
 module.exports = function (deployer) {
-  deployer.deploy(Migrations);
+  deployer.deploy(DAO,10e20);
 };
