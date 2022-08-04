@@ -10,15 +10,15 @@ contract MyDAO is Ownable,AccessControl,ReentrancyGuard,ERC20{
     using SafeMath for uint;
     using Counters for Counters.Counter;
     
-    constructor(uint _supply)
+    constructor()
     ERC20("DAOTOKEN","DAOTOK"){
-        _mint(address(this),_supply);
+        
     }
     // ROLES AVALAIBLE
     bytes32 public constant CFO = keccak256("CFO");
     bytes32 public constant CEO = keccak256("CEO");
     bytes32 public constant COO = keccak256("COO");
-    bytes32 public constant MEMBER_ROLE = keccak256("MEMEBER");
+    bytes32 public constant MEMBER_ROLE = keccak256("MEMBER");
     bytes32 public constant DIRECTOR_ROLE = keccak256("DIRECTOR");
 
     //STRUCT
@@ -35,12 +35,17 @@ contract MyDAO is Ownable,AccessControl,ReentrancyGuard,ERC20{
         address payable candidate;   
     }
 
+    //ARRAY FOR ADDRESSES THAT REQUESTED A ROLE
+    address[] private RoleRequest;
+
     // MAPPINGS
-    mapping(address => uint256)Purchased;
     mapping(uint256 => Request)Proposals;
     mapping(address => bool)private CLevel;
     mapping(address => bool)private Member;
     mapping(address => bool)private Director;
+    mapping(address => bool)private Stakeholder;
+    mapping(address => bool)private RequestedMember;
+    mapping(address => bool)private RequestedDirector;
     mapping(uint256 => mapping(address => bool))Voted;
     
     // STATE VARIABLE DECLARATION
@@ -48,9 +53,9 @@ contract MyDAO is Ownable,AccessControl,ReentrancyGuard,ERC20{
     Counters.Counter private MEMBER_COUNT;
     Counters.Counter private DIRECTOR_COUNT;
     
-    uint256 private MEMBER_LEVEL = 1e5;
+    uint256 private MEMBER_LEVEL = 100;
     uint256 private VOTING_AMOUNT = 10;
-    uint256 private DIRECTOR_LEVEL = 1e12;
+    uint256 private DIRECTOR_LEVEL = 1000;
     uint8 private MEMBER_VOTING_WEIGHT = 1; 
     uint8 private DIRECTOR_VOTING_WEIGHT = 2;
     uint256 private VOTING_DURATION = 5 minutes;
@@ -86,27 +91,31 @@ contract MyDAO is Ownable,AccessControl,ReentrancyGuard,ERC20{
         require(hasRole(COO,msg.sender),"You are not the COO");
         _;
     }
-    modifier OnlyMember(){
-        require(hasRole(MEMBER_ROLE,msg.sender),"You are not a MEMBER");
+    modifier OnlyStakeholder(){
+        require(Stakeholder[msg.sender] == true,"You are not a MEMBER");
         _;
     }
      modifier OnlyDirector(){
         require(hasRole(DIRECTOR_ROLE,msg.sender),"You are not a DIRECTOR");
         _;
     }
+    modifier EitherCEOorCOO(){
+        require(hasRole(COO,msg.sender) || hasRole(CEO,msg.sender) == true,"You are not a CEO or COO");
+        _;
+    }
     
     //FUNCTION TO PURCHASE TOKENS
     function PurchaseTokens()external payable returns(bool success){
-    require(msg.value >= 10000,"Send at least 10000 wei");
-    uint amount = msg.value.div(1000);
-    _transfer(address(this),msg.sender,amount);
-    Purchased[msg.sender].add(amount);
+    require(msg.value <= 100000 wei,"You cannot send more than 100000 wei");
+    uint amount = msg.value.div(100);
+    _mint(msg.sender,amount);
     emit purchaseTokens(msg.sender,amount,block.timestamp);
     return true;
     }
     
     //FUNCTION TO ASSIGN CFO ROLE ONLY OWNER CAN ASSIGN
     function AssignCFO(address _candidate)external onlyOwner CLevelRole(_candidate) returns(bool success){
+    require(_candidate != msg.sender,"You cannot take on a CLevelRole");
     _grantRole(CFO,_candidate);
      CLevel[_candidate] = true;
      emit assignCFO(_candidate,msg.sender,block.timestamp);
@@ -114,6 +123,7 @@ contract MyDAO is Ownable,AccessControl,ReentrancyGuard,ERC20{
     }
     //FUNCTION TO ASSIGN CEO ROLE ONLY OWNER CAN ASSIGN
      function AssignCEO(address _candidate)external onlyOwner CLevelRole(_candidate) returns(bool success){
+    require(_candidate != msg.sender,"You cannot take on a CLevelRole");
     _grantRole(CEO,_candidate);
      CLevel[_candidate] = true;
      emit assignCEO(_candidate,msg.sender,block.timestamp);
@@ -121,6 +131,7 @@ contract MyDAO is Ownable,AccessControl,ReentrancyGuard,ERC20{
     }
     //FUNCTION TO ASSIGN COO ROLE ONLY OWNER CAN ASSIGN
      function AssignCOO(address _candidate)external onlyOwner CLevelRole(_candidate) returns(bool success){
+    require(_candidate != msg.sender,"You cannot take on a CLevelRole");
     _grantRole(COO,_candidate);
     CLevel[_candidate] = true;
     emit assignCOO(_candidate,msg.sender,block.timestamp);
@@ -143,10 +154,9 @@ contract MyDAO is Ownable,AccessControl,ReentrancyGuard,ERC20{
     }
      
      //VOTE FOR A PROPOSAL
-    function VoteForProposal(uint id, bool vote) external OnlyMember OnlyDirector returns(bool success){
+    function VoteForProposal(uint id, bool vote) external OnlyStakeholder{
      require(Proposals[id].candidate != address(0),"Proposal does not exist");
-     require(Purchased[msg.sender] >= VOTING_AMOUNT,"Insufficient token balance");
-     require(vote == true || false,"Input either TRUE or FALSE");
+     require(balanceOf(msg.sender) >= VOTING_AMOUNT,"Insufficient token balance");
      require(Proposals[id].votingDuration > block.timestamp,"Voting has already ended");
      require(Voted[id][msg.sender] == false,"You can vote only once");
      Voted[id][msg.sender] = true;
@@ -157,17 +167,17 @@ contract MyDAO is Ownable,AccessControl,ReentrancyGuard,ERC20{
         Proposals[id].membersVotes + MEMBER_VOTING_WEIGHT;
         FOR += MEMBER_VOTING_WEIGHT;
      }
-     else if(Member[msg.sender] == true && vote == false){
+      if(Member[msg.sender] == true && vote == false){
         _Vote();
         Proposals[id].membersAgainst + MEMBER_VOTING_WEIGHT;
         AGAINST += MEMBER_VOTING_WEIGHT;
      }
-     else if(Director[msg.sender] == true && vote == true){
+      if(Director[msg.sender] == true && vote == true){
         _Vote();
         Proposals[id].directorVotes + DIRECTOR_VOTING_WEIGHT;
         FOR += DIRECTOR_VOTING_WEIGHT;
      }
-     else if(Director[msg.sender] == true && vote == false){
+      if(Director[msg.sender] == true && vote == false){
         _Vote();
         Proposals[id].directorAgainst + DIRECTOR_VOTING_WEIGHT;
        AGAINST += DIRECTOR_VOTING_WEIGHT;
@@ -187,42 +197,47 @@ contract MyDAO is Ownable,AccessControl,ReentrancyGuard,ERC20{
     }
       //FUNCTION FOR VOTING FOR A PROPOSAL
       function _Vote()internal returns(bool success){
-        _transfer(msg.sender,address(this),VOTING_AMOUNT);
+        transfer(address(this),VOTING_AMOUNT);
         return true;
     } 
    
     //FUNCTION TO ASSIGN ROLE ITS BASED ON NUMBER OF TOKENS BOUGHT
-    function AssignRole(address _candidate)external OnlyCEO OnlyCOO returns(bool success){
-        if(Purchased[_candidate] < MEMBER_LEVEL){
+    function AssignMemberRole(address _candidate)external EitherCEOorCOO CLevelRole(_candidate) returns(bool success){
+        require(RequestedMember[_candidate] == true,"Request Member Role First");
+        require(Stakeholder[_candidate] == false,"You are already a Stakeholder");
+        require(!hasRole(MEMBER_ROLE,_candidate),"You are already a MEMBER");
+            _grantRole(MEMBER_ROLE,_candidate);
+            RoleRequest.pop();
+            MEMBER_COUNT.increment();
+            Stakeholder[_candidate] = true;
+            emit assignRole(_candidate,msg.sender,block.timestamp);
             return true;
         }
-        else if(Purchased[_candidate] >= MEMBER_LEVEL){
-            require(!hasRole(MEMBER_ROLE,_candidate),"You are already a MEMBER");
-            _grantRole(MEMBER_ROLE,_candidate);
-            MEMBER_COUNT.increment();
-            Member[_candidate] = true;
-        }
-        else if(Purchased[_candidate] >= DIRECTOR_LEVEL){
-            require(!hasRole(DIRECTOR_ROLE,_candidate),"You are already a DIRECTOR");
-            Member[_candidate] = false;
-            _grantRole(DIRECTOR_ROLE,_candidate);
+
+         function AssignDirectorRole(address _candidate)external EitherCEOorCOO CLevelRole(_candidate) returns(bool success){
+        require(RequestedDirector[_candidate] == true,"Request Director Role First");
+        require(Stakeholder[_candidate] == false,"You are already a Stakeholder");
+        require(!hasRole(DIRECTOR_ROLE,_candidate),"You are already a MEMBER");
+        _revokeRole(MEMBER_ROLE,_candidate);
+         _grantRole(DIRECTOR_ROLE,_candidate);
+            RoleRequest.pop();
             DIRECTOR_COUNT.increment();
-            Director[_candidate] = true;
+            Stakeholder[_candidate] = true;
+            emit assignRole(_candidate,msg.sender,block.timestamp);
+            return true;
         }
-        emit assignRole(_candidate,msg.sender,block.timestamp);
-        return true;
-    }
+    
         
         //FUNCTION TO REVOKE CLEVEL ROLE ONLY COO CEO AND OWNER CAN CALL IT
-    function RevokeCLevelRole(address _candidate)external OnlyCEO OnlyCOO onlyOwner returns(bool success){
+    function RevokeCLevelRole(address _candidate)external EitherCEOorCOO returns(bool success){
         require(CLevel[_candidate] == true,"Address must have a CLevel role");
         if(hasRole(COO,_candidate)){
             _revokeRole(COO,_candidate);
         }
-        else if(hasRole(CFO,_candidate)){
+        if(hasRole(CFO,_candidate)){
             _revokeRole(CFO,_candidate);
         }
-        else if(hasRole(CEO,_candidate)){
+        if(hasRole(CEO,_candidate)){
             _revokeRole(CEO,_candidate);
         }
         emit revokeCLevelRole(_candidate,msg.sender,block.timestamp);
@@ -270,11 +285,40 @@ contract MyDAO is Ownable,AccessControl,ReentrancyGuard,ERC20{
     } 
     //FUNCTION TO VIEW TOKEN BALANCE OF USER
     function TokenBalance()public view returns(uint){
-        return Purchased[msg.sender];
+        return balanceOf(msg.sender);
     }
-    //FUNCTION TO CHECK CONTRACT BALANCE
-    function ContractBalance()public view returns(uint){
-        return address(this).balance;
-    }    
+    
+    //FUNCTION TO CHECK STAKEHOLDER ROLE
+    function CheckRole(address _candidate)public view returns(string memory ROLE){
+        require(Stakeholder[_candidate] == true,"User is not a stakeholder");
+        if(hasRole(MEMBER_ROLE,_candidate)){
+            return " : MEMBER";
+        }
+         if (hasRole(DIRECTOR_ROLE,_candidate)){
+            return " : DIRECTOR";
+        }
+
+    }
+    //FUNCTION TO REQUEST STAKEHOLDER ROLE
+    function RequestMemberRole()CLevelRole(msg.sender) external returns(bool success){
+    require(RequestedMember[msg.sender] == false,"You have requested a role");
+    require(balanceOf(msg.sender) >= MEMBER_LEVEL,"You have not reached the Token requirements");
+    RoleRequest.push(msg.sender);
+    RequestedMember[msg.sender] = true;
+    return true;
+    }
+
+    function RequestDirectorRole()CLevelRole(msg.sender) external returns(bool success){
+    require(RequestedDirector[msg.sender] == false,"You have requested a role");
+    require(balanceOf(msg.sender) >= DIRECTOR_LEVEL,"You have not reached the Token requirements");
+    RoleRequest.push(msg.sender);
+    RequestedDirector[msg.sender] = true;
+    return true;
+    }
+
+    //VIEW ADDRESSES THAT REQUESTED A ROLE
+    function RoleRequesters()public view returns(address[]memory){
+        return RoleRequest;
+    }
 
 }
