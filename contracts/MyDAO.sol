@@ -95,12 +95,12 @@ contract MyDAO is Ownable,AccessControl,ReentrancyGuard,ERC20{
         _;
     }
     modifier EitherCEOorCOO(){
-        require(hasRole(COO,msg.sender) || hasRole(CEO,msg.sender) == true,"You are not CEO or COO");
+        require(hasRole(COO,msg.sender) || hasRole(CEO,msg.sender) == true,"You are not CEO/COO");
         _;
     }
     
     //FUNCTION TO PURCHASE TOKENS
-    function PurchaseTokens()external payable returns(bool success){
+    function PurchaseTokens()external payable returns(bool){
     require(msg.value <= 100000 wei);
     uint amount = msg.value.div(100);
     _mint(msg.sender,amount);
@@ -109,7 +109,7 @@ contract MyDAO is Ownable,AccessControl,ReentrancyGuard,ERC20{
     }
     
     //FUNCTION TO ASSIGN CFO ROLE ONLY OWNER CAN ASSIGN
-    function AssignCFO(address _candidate)external onlyOwner CLevelRole(_candidate) returns(bool success){
+    function AssignCFO(address _candidate)external onlyOwner CLevelRole(_candidate) returns(bool){
     require(_candidate != msg.sender);
     _grantRole(CFO,_candidate);
      CLevel[_candidate] = true;
@@ -117,7 +117,7 @@ contract MyDAO is Ownable,AccessControl,ReentrancyGuard,ERC20{
     return true;
     }
     //FUNCTION TO ASSIGN CEO ROLE ONLY OWNER CAN ASSIGN
-     function AssignCEO(address _candidate)external onlyOwner CLevelRole(_candidate) returns(bool success){
+     function AssignCEO(address _candidate)external onlyOwner CLevelRole(_candidate) returns(bool){
     require(_candidate != msg.sender);
     _grantRole(CEO,_candidate);
      CLevel[_candidate] = true;
@@ -125,7 +125,7 @@ contract MyDAO is Ownable,AccessControl,ReentrancyGuard,ERC20{
     return true;
     }
     //FUNCTION TO ASSIGN COO ROLE ONLY OWNER CAN ASSIGN
-     function AssignCOO(address _candidate)external onlyOwner CLevelRole(_candidate) returns(bool success){
+     function AssignCOO(address _candidate)external onlyOwner CLevelRole(_candidate) returns(bool){
     require(_candidate != msg.sender);
     _grantRole(COO,_candidate);
     CLevel[_candidate] = true;
@@ -137,7 +137,7 @@ contract MyDAO is Ownable,AccessControl,ReentrancyGuard,ERC20{
      //DEPENDS ON THE DESCRIPTION 
      //IE IF ITS A CHARITY THE DESCRIPTION WILL SAY CHARITY 
      //IF ITS FOR A DECISION THE DESCRIPTION WILL SAY 
-     function CreateProposal(address payable _beneficiary,string memory _description) external OnlyDirector returns(bool success){
+     function CreateProposal(address payable _beneficiary,string memory _description) external OnlyDirector returns(bool){
      ID.increment();
      uint count = ID.current();
      Proposals[count].candidate = _beneficiary;
@@ -148,11 +148,11 @@ contract MyDAO is Ownable,AccessControl,ReentrancyGuard,ERC20{
      return true;
     }
      
-     //VOTE FOR A PROPOSAL
+     //FUNCTION TO ALLOW MEMBERS TO VOTE
     function VoteProposalMember(uint id, bool vote)external{
      require(Proposals[id].candidate != address(0));
      require(hasRole(MEMBER_ROLE,msg.sender));
-     require(balanceOf(msg.sender) >= VOTING_AMOUNT,"Insufficient token ");
+     require(balanceOf(msg.sender) >= VOTING_AMOUNT);
      require(Proposals[id].votingDuration > block.timestamp,"Voting ended");
      require(Voted[id][msg.sender] == false,"Voted");
      if(vote){
@@ -168,10 +168,11 @@ contract MyDAO is Ownable,AccessControl,ReentrancyGuard,ERC20{
 
       emit voteProposal(msg.sender,id,vote,block.timestamp);
      }
-
-     function VoteProposalDirector(uint id,bool vote) OnlyDirector external{
+     
+     //FUNCTION TO ALLOW DIRECTORS TO VOTE 
+     function VoteProposalDirector(uint id,bool vote)OnlyDirector external{
      require(Proposals[id].candidate != address(0));
-     require(balanceOf(msg.sender) >= VOTING_AMOUNT,"Insufficient token ");
+     require(balanceOf(msg.sender) >= VOTING_AMOUNT);
      require(Proposals[id].votingDuration > block.timestamp,"Voting ended");
      require(Voted[id][msg.sender] == false,"Voted");
      if(vote){
@@ -186,13 +187,15 @@ contract MyDAO is Ownable,AccessControl,ReentrancyGuard,ERC20{
       }
 
       emit voteProposal(msg.sender,id,vote,block.timestamp);
+
      }
     
 
     
     //FUNCTION TO COLLATE RESULT OF VOTE AND DECIDE OUTCOME 
-    function COLLATION(uint id) external returns(bool success){
-        require(block.timestamp > Proposals[id].votingDuration);
+    function COLLATION(uint id) external returns(bool){
+       require(block.timestamp > Proposals[id].votingDuration);
+       require(Proposals[id].candidate != address(0));
        uint FOR;
        uint AGAINST;
        FOR = Proposals[id].membersVotes + Proposals[id].directorVotes;
@@ -203,8 +206,8 @@ contract MyDAO is Ownable,AccessControl,ReentrancyGuard,ERC20{
        return true; 
     }
     
-    //FUNCTION TO ASSIGN ROLE ITS BASED ON NUMBER OF TOKENS BOUGHT
-    function AssignMemberRole(address _candidate)external EitherCEOorCOO CLevelRole(_candidate) returns(bool success){
+    //FUNCTION TO ASSIGN MEMBER ROLE
+    function AssignMemberRole(address _candidate)external EitherCEOorCOO CLevelRole(_candidate) returns(bool){
         require(RequestedMember[_candidate] == true);
         require(Stakeholder[_candidate] == false);
         require(!hasRole(MEMBER_ROLE,_candidate));
@@ -216,8 +219,8 @@ contract MyDAO is Ownable,AccessControl,ReentrancyGuard,ERC20{
             emit assignRole(_candidate,msg.sender,block.timestamp);
             return true;
         }
-
-         function AssignDirectorRole(address _candidate)external EitherCEOorCOO CLevelRole(_candidate) returns(bool success){
+        //FUNCTION TO ASSIGN DIRECTOR ROLE
+         function AssignDirectorRole(address _candidate)external EitherCEOorCOO CLevelRole(_candidate) returns(bool){
         require(RequestedDirector[_candidate] == true);
         require(Stakeholder[_candidate] == false);
         require(!hasRole(DIRECTOR_ROLE,_candidate));
@@ -233,7 +236,7 @@ contract MyDAO is Ownable,AccessControl,ReentrancyGuard,ERC20{
     
         
         //FUNCTION TO REVOKE CLEVEL ROLE ONLY COO CEO AND OWNER CAN CALL IT
-    function RevokeCLevelRole(address _candidate)external EitherCEOorCOO returns(bool success){
+    function RevokeCLevelRole(address _candidate)external EitherCEOorCOO returns(bool){
         require(CLevel[_candidate] == true);
         if(hasRole(COO,_candidate)){
             _revokeRole(COO,_candidate);
@@ -291,15 +294,15 @@ contract MyDAO is Ownable,AccessControl,ReentrancyGuard,ERC20{
     function CheckRole(address _candidate)public view returns(string memory ROLE){
         require(Stakeholder[_candidate] == true);
         if(hasRole(MEMBER_ROLE,_candidate)){
-            return " : MEMBER";
+            return "MEMBER";
         }
          if (hasRole(DIRECTOR_ROLE,_candidate)){
-            return " : DIRECTOR";
+            return "DIRECTOR";
         }
 
     }
-    //FUNCTION TO REQUEST STAKEHOLDER ROLE
-    function RequestMemberRole()CLevelRole(msg.sender) external returns(bool success){
+    //FUNCTION TO REQUEST MEMBER ROLE
+    function RequestMemberRole()CLevelRole(msg.sender) external returns(bool){
     require(RequestedMember[msg.sender] == false);
     require(Stakeholder[msg.sender] == false);
     require(balanceOf(msg.sender) >= MEMBER_LEVEL);
@@ -307,8 +310,8 @@ contract MyDAO is Ownable,AccessControl,ReentrancyGuard,ERC20{
     RequestedMember[msg.sender] = true;
     return true;
     }
-
-    function RequestDirectorRole()CLevelRole(msg.sender) external returns(bool success){
+    //FUNCTION TO REQUEST DIRECTOR ROLE
+    function RequestDirectorRole()CLevelRole(msg.sender) external returns(bool){
     require(RequestedDirector[msg.sender] == false);
     require(Stakeholder[msg.sender] == false);
     require(balanceOf(msg.sender) >= DIRECTOR_LEVEL);
@@ -317,10 +320,11 @@ contract MyDAO is Ownable,AccessControl,ReentrancyGuard,ERC20{
     return true;
     }
 
-    //VIEW ADDRESSES THAT REQUESTED A ROLE
+    //VIEW ADDRESSES THAT REQUESTED A MEMBER ROLE
     function MemberRoleRequesters()public view returns(address[]memory){
         return MemberRoleRequest;
     }
+    //VIEW ADDRESSES THAT REQUESTED A DIRECTOR ROLE
     function DirectorRoleRequesters()public view returns(address[]memory){
         return DirectorRoleRequest;
     }
